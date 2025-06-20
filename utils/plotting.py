@@ -275,6 +275,7 @@ def plot_distributions(nominal_data, alternate_data,
                        nbins = 100,
                        global_name = "",
                        Tsallis_EMD = False,
+                       write_table = True,
                        **kwargs):
     """
     Assumes carl weights is an iterable!
@@ -380,19 +381,20 @@ def plot_distributions(nominal_data, alternate_data,
     hist_x1, edges_x1, _ = axes[0,0].hist(x1, bins=binning, weights=w1, label=label, **hist_settings_alt, density=True);
 
     # =======  Add the closure metrics ==========
-    # Chi^{2}
-    chisquares = [weighted_chi_square_test( x1, w1, x0, w0, binning )]
-    stat_measures[r'$\chi^{2}$ Scores']['Base / Target:'] = weighted_chi_square_test( x1, w1, x0, w0, binning )
-    # Tsallis Relative Entropy
-    tsallis_KL = [Tsallis_KL( x1, w1, x0, w0, binning )]
-    stat_measures[r'$D_{q=2}(B || T)$']['Base / Target:'] = Tsallis_KL( x1, w1, x0, w0, binning )
-    # Tsallis EMD
-    if Tsallis_EMD:
-        stat_measures['Tsallis EMD']['Base / Target:'] = np.sqrt(np.sum(TROT( q[0], 
-                                                                              CostMatrix, 
-                                                                              hist_x1, hist_x0,
-                                                                              l[0],
-                                                                              1E-7)*CostMatrix))
+    if write_table:
+        # Chi^{2}
+        chisquares = [weighted_chi_square_test( x1, w1, x0, w0, binning )]
+        stat_measures[r'$\chi^{2}$ Scores']['Base / Target:'] = weighted_chi_square_test( x1, w1, x0, w0, binning )
+        # Tsallis Relative Entropy
+        tsallis_KL = [Tsallis_KL( x1, w1, x0, w0, binning )]
+        stat_measures[r'$D_{q=2}(B || T)$']['Base / Target:'] = Tsallis_KL( x1, w1, x0, w0, binning )
+        # Tsallis EMD
+        if Tsallis_EMD:
+            stat_measures['Tsallis EMD']['Base / Target:'] = np.sqrt(np.sum(TROT( q[0], 
+                                                                                CostMatrix, 
+                                                                                hist_x1, hist_x0,
+                                                                                l[0],
+                                                                                1E-7)*CostMatrix))
 
     # Form the CARL histograms
     carl_hists = []
@@ -403,7 +405,7 @@ def plot_distributions(nominal_data, alternate_data,
         carl_hists.append(hist)
         
         # - TROT EMD metric
-        if Tsallis_EMD:
+        if Tsallis_EMD and write_table:
             U = TROT( q[0], 
                       CostMatrix, 
                       np.array(hist), np.array(hist_x1),
@@ -424,26 +426,28 @@ def plot_distributions(nominal_data, alternate_data,
     y_min, y_max = axes[0,0].get_ylim()
     axes[0,0].set_ylim([y_min*0.9, y_max*1.35])    
 
-    # Calculate the closure metrics
-    colors = []
-    for idx in range(len(w_carl)):
-        # - Closure metrics: Chi^{2}
-        chisquares.append(weighted_chi_square_test( x1, w1, x0, w_carl[idx], binning )) 
-        #stat_measures[r'$\chi^{2}$ Scores'][f'{carl_names[idx]} / Target:'] = weighted_chi_square_test( x1, w1, x0, w_carl[idx], binning )
-        stat_measures[r'$\chi^{2}$ Scores'][f'{carl_names[idx]}:'] = weighted_chi_square_test( x1, w1, x0, w_carl[idx], binning )
-        # - Closure metrics: Tsallis Relative Entropy
-        tsallis_KL.append( Tsallis_KL( x1, w1, x0, w_carl[idx], binning ) )
-        #stat_measures[r'$D_{q=2}(B || T)$'][f'{carl_names[idx]} / Target:'] = Tsallis_KL( x1, w1, x0, w_carl[idx], binning )
-        stat_measures[r'$D_{q=2}(B || T)$'][f'{carl_names[idx]}:'] = Tsallis_KL( x1, w1, x0, w_carl[idx], binning )
-    
-        # - Record the colors for each comparison
-        colors.append(plt.rcParams['axes.prop_cycle'].by_key()['color'][idx])
+    if write_table:
+        # Calculate the closure metrics
+        # colors = []
+        for idx in range(len(w_carl)):
+            # - Closure metrics: Chi^{2}
+            chisquares.append(weighted_chi_square_test( x1, w1, x0, w_carl[idx], binning )) 
+            #stat_measures[r'$\chi^{2}$ Scores'][f'{carl_names[idx]} / Target:'] = weighted_chi_square_test( x1, w1, x0, w_carl[idx], binning )
+            stat_measures[r'$\chi^{2}$ Scores'][f'{carl_names[idx]}:'] = weighted_chi_square_test( x1, w1, x0, w_carl[idx], binning )
+            # - Closure metrics: Tsallis Relative Entropy
+            tsallis_KL.append( Tsallis_KL( x1, w1, x0, w_carl[idx], binning ) )
+            #stat_measures[r'$D_{q=2}(B || T)$'][f'{carl_names[idx]} / Target:'] = Tsallis_KL( x1, w1, x0, w_carl[idx], binning )
+            stat_measures[r'$D_{q=2}(B || T)$'][f'{carl_names[idx]}:'] = Tsallis_KL( x1, w1, x0, w_carl[idx], binning )
+        
+            # - Record the colors for each comparison
+            # colors.append(plt.rcParams['axes.prop_cycle'].by_key()['color'][idx])
 
     # Add the statistical measures to the free top right pane
-    if kwargs.get('table.fontsize'):
-        write_table(axes, stat_measures, fontsize=kwargs['table.fontsize'])
-    else:
-        write_table(axes, stat_measures)
+    if write_table:
+        if kwargs.get('table.fontsize'):
+            write_table(axes, stat_measures, fontsize=kwargs['table.fontsize'])
+        else:
+            write_table(axes, stat_measures)
 
     # ratio plot
     x0_hist, edge0 = np.histogram(x0, bins = binning, weights = w0, density=True)
@@ -530,13 +534,14 @@ def plot_distributions(nominal_data, alternate_data,
                              bin_edges = edge1,
                              resi_range = max_resi_range,
                              column=column,
-                             color= colors[i])
+                             color = plt.rcParams['axes.prop_cycle'].by_key()['color'][i])
+                            #  color= colors[i])
 
 
     # Additinal styling
     add_luminosity(collaboration=f"{global_name}",
                    ax=axes[0,0], fontsize=16, lumi='',
-                   preliminary=True)
+                   preliminary=False)
 
     if saveAs is not None:
         fig.savefig(saveAs)
