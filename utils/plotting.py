@@ -275,7 +275,7 @@ def plot_distributions(nominal_data, alternate_data,
                        nbins = 100,
                        global_name = "",
                        Tsallis_EMD = False,
-                       write_table = True,
+                       add_table = True,
                        **kwargs):
     """
     Assumes carl weights is an iterable!
@@ -381,7 +381,7 @@ def plot_distributions(nominal_data, alternate_data,
     hist_x1, edges_x1, _ = axes[0,0].hist(x1, bins=binning, weights=w1, label=label, **hist_settings_alt, density=True);
 
     # =======  Add the closure metrics ==========
-    if write_table:
+    if add_table:
         # Chi^{2}
         chisquares = [weighted_chi_square_test( x1, w1, x0, w0, binning )]
         stat_measures[r'$\chi^{2}$ Scores']['Base / Target:'] = weighted_chi_square_test( x1, w1, x0, w0, binning )
@@ -405,7 +405,7 @@ def plot_distributions(nominal_data, alternate_data,
         carl_hists.append(hist)
         
         # - TROT EMD metric
-        if Tsallis_EMD and write_table:
+        if Tsallis_EMD and add_table:
             U = TROT( q[0], 
                       CostMatrix, 
                       np.array(hist), np.array(hist_x1),
@@ -426,7 +426,7 @@ def plot_distributions(nominal_data, alternate_data,
     y_min, y_max = axes[0,0].get_ylim()
     axes[0,0].set_ylim([y_min*0.9, y_max*1.35])    
 
-    if write_table:
+    if add_table:
         # Calculate the closure metrics
         # colors = []
         for idx in range(len(w_carl)):
@@ -443,7 +443,7 @@ def plot_distributions(nominal_data, alternate_data,
             # colors.append(plt.rcParams['axes.prop_cycle'].by_key()['color'][idx])
 
     # Add the statistical measures to the free top right pane
-    if write_table:
+    if add_table:
         if kwargs.get('table.fontsize'):
             write_table(axes, stat_measures, fontsize=kwargs['table.fontsize'])
         else:
