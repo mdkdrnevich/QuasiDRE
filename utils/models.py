@@ -175,7 +175,7 @@ class MixtureClassifier(torch.nn.Module):
             if self.t0 is None or self.t1 is None:
                 raise Exception("Need to initialize with values for the hyperparemeters t0, t1 to use this score function")
             s = torch.where(torch.isinf(total_ratio), 1/self.t1, (self.t0 + self.t1 * total_ratio) / (self.t0**2 + self.t1**2 * total_ratio))
-        elif score_function.lower() == "qdre":
+        elif score_function.lower() == "revert":
             s = torch.where(total_ratio == 0, 0.5, (total_ratio + 2 - torch.sqrt(total_ratio**2 + 4)) / (2*total_ratio))           
         else:
             raise Exception("Unsupported score function: {}".format(score_function))

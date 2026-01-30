@@ -51,8 +51,8 @@ def pare_loss(y_hat, y, t0, t1, reduction='none'):
            y * F.mse_loss(y_hat * t1, ones, reduction=reduction)
 
 
-def qdre_loss(y_hat, y, reduction='none'):
-    """Quasi-DRE (QDRE) loss used for density-ratio estimation.
+def revert_loss(y_hat, y, reduction='none'):
+    """Quasi-DRE (REVERT) loss used for density-ratio estimation.
 
     The implementation follows the form used in the project: for
     positives the loss contribution grows with `y_hat` linearly, while
@@ -89,7 +89,7 @@ def test(model, loader, X_scaler=None, weight_norm=1, loss='bce', max_num_batche
     `loader` and returns a list of per-batch loss values plus the mean
     loss. The function supports standard binary cross-entropy ('bce'),
     mean-squared-error ('mse'), the custom Pare loss ('pare'), the
-    QDRE loss ('qdre'), or an arbitrary callable `loss` that accepts
+    REVERT loss ('revert'), or an arbitrary callable `loss` that accepts
     `(predictions, labels, weights)` and returns a Tensor.
 
     Special handling for SMM (mixture) models: when `SMM=True` the
@@ -162,8 +162,8 @@ def test(model, loader, X_scaler=None, weight_norm=1, loss='bce', max_num_batche
             batch_loss_item = (F.mse_loss(batch_output, y, reduction='none') * w).mean().cpu().item()
         elif loss == "pare":
             batch_loss_item = (pare_loss(batch_output, y, t0, t1, reduction='none') * w).mean().cpu().item()
-        elif loss == "qdre":
-            batch_loss_item = (qdre_loss(batch_output, y, reduction='none') * w).mean().cpu().item()
+        elif loss == "revert":
+            batch_loss_item = (revert_loss(batch_output, y, reduction='none') * w).mean().cpu().item()
         elif type(loss) is types.FunctionType:
             # custom loss signature: (preds, labels, weights)
             batch_loss_item = loss(batch_output, y, w).cpu().item()
@@ -250,8 +250,8 @@ def train(model, optimizer, loader, X_scaler=None, weight_norm=1, loss='bce', ma
             batch_loss = (F.mse_loss(batch_output, y, reduction='none') * w).mean()
         elif loss == "pare":
             batch_loss = (pare_loss(batch_output, y, t0, t1, reduction='none') * w).mean()
-        elif loss == "qdre":
-            batch_loss = (qdre_loss(batch_output, y, reduction='none') * w).mean()
+        elif loss == "revert":
+            batch_loss = (revert_loss(batch_output, y, reduction='none') * w).mean()
         elif type(loss) is types.FunctionType:
             batch_loss = loss(batch_output, y, w)
         else:
@@ -291,7 +291,7 @@ def get_optimal_loss(model, loader, weight_norm=1, loss='bce',
             two columns are used (hence `x[:, :2]` below).
         loader (DataLoader): yields `(x, y, w)`.
         weight_norm (float): normalization forwarded to preprocessing.
-        loss (str): 'bce', 'mse', 'pare', or 'qdre'.
+        loss (str): 'bce', 'mse', 'pare', or 'revert'.
         progress_bar, leave, device: display and device controls.
         **kwargs: extra parameters for loss computations (e.g., t0, t1).
 
@@ -326,8 +326,8 @@ def get_optimal_loss(model, loader, weight_norm=1, loss='bce',
             batch_r = batch_output / (1 - batch_output)
             batch_s = (t0 + t1 * batch_r) / (t0**2 + t1**2 * batch_r)
             batch_loss_item = (pare_loss(batch_s, y, t0, t1, reduction='none') * w).mean().cpu().item()
-        elif loss == 'qdre':
-            batch_loss_item = (qdre_loss(batch_output, y, reduction='none') * w).mean().cpu().item()
+        elif loss == 'revert':
+            batch_loss_item = (revert_loss(batch_output, y, reduction='none') * w).mean().cpu().item()
 
         sum_loss += batch_loss_item
         if progress_bar is True:
