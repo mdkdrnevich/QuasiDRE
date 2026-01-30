@@ -276,6 +276,8 @@ def plot_distributions(nominal_data, alternate_data,
                        global_name = "",
                        Tsallis_EMD = False,
                        add_table = True,
+                       show=True,
+                       logging=False,
                        **kwargs):
     """
     Assumes carl weights is an iterable!
@@ -283,7 +285,8 @@ def plot_distributions(nominal_data, alternate_data,
     for key,value in kwargs.items():
         try:
             plt.rcParams[key] = value
-            print(f'rcParams setting {key}  =  {value}')
+            if logging:
+                print(f'rcParams setting {key}  =  {value}')
         except KeyError:
             pass # not a valid rcParam
 
@@ -418,7 +421,7 @@ def plot_distributions(nominal_data, alternate_data,
 
     # Set the primary axis style - [0,0]
     axes[0,0].set_xlabel('%s'%(column), horizontalalignment='right',x=1)
-    axes[0,0].set_ylabel(r"$\frac{1}{N} \cdot \frac{d \sigma}{dx}$", horizontalalignment='center',x=1, fontsize=20)
+    axes[0,0].set_ylabel(r"$\frac{1}{N} \cdot \frac{d \\sigma}{dx}$", horizontalalignment='center',x=1, fontsize=20)
     if logscale is True:
         axes[0,0].set_yscale("log")
     axes[0,0].legend(frameon=False,title = f'{legend_title}', prop=font )
@@ -546,6 +549,10 @@ def plot_distributions(nominal_data, alternate_data,
     if saveAs is not None:
         fig.savefig(saveAs)
 
+    # If requested, prevent the figure from being displayed in IPython notebooks
+    if not show:
+        plt.close(fig)
+
     return hist_x0, hist_x1, binning
     # Done!!!
 
@@ -592,12 +599,12 @@ def ResidualPane( pane_id, axes,
     yref_5error_down_base = np.full(bins, -3)
 
     # Make the error bars
-    FiveSigma  = axes[pane_id,0].fill_between(bin_edges, yref_5error_up_base, yref_5error_up       , color='lightcoral', alpha=0.2 , label = "5$\sigma$")
-    FiveSigma  = axes[pane_id,0].fill_between(bin_edges, yref_5error_down   , yref_5error_down_base, color='lightcoral', alpha=0.2 , label = "5$\sigma$")
-    ThreeSigma = axes[pane_id,0].fill_between(bin_edges, yref_3error_up_base, yref_3error_up       , color='bisque'    , alpha=0.3, label = "3$\sigma$")
-    ThreeSigma = axes[pane_id,0].fill_between(bin_edges, yref_3error_down   , yref_3error_down_base, color='bisque'    , alpha=0.3, label = "3$\sigma$")
-    OneSigma   = axes[pane_id,0].fill_between(bin_edges, yref_error_down    , yref_error_up        , color='olivedrab' , alpha=0.2, label = "1$\sigma$")
-    OneSigma   = axes[pane_id,0].fill_between(bin_edges, yref_error_down    , yref_error_up        , color='olivedrab' , alpha=0.2, label = "1$\sigma$")
+    FiveSigma  = axes[pane_id,0].fill_between(bin_edges, yref_5error_up_base, yref_5error_up       , color='lightcoral', alpha=0.2 , label = "5$\\sigma$")
+    FiveSigma  = axes[pane_id,0].fill_between(bin_edges, yref_5error_down   , yref_5error_down_base, color='lightcoral', alpha=0.2 , label = "5$\\sigma$")
+    ThreeSigma = axes[pane_id,0].fill_between(bin_edges, yref_3error_up_base, yref_3error_up       , color='bisque'    , alpha=0.3, label = "3$\\sigma$")
+    ThreeSigma = axes[pane_id,0].fill_between(bin_edges, yref_3error_down   , yref_3error_down_base, color='bisque'    , alpha=0.3, label = "3$\\sigma$")
+    OneSigma   = axes[pane_id,0].fill_between(bin_edges, yref_error_down    , yref_error_up        , color='olivedrab' , alpha=0.2, label = "1$\\sigma$")
+    OneSigma   = axes[pane_id,0].fill_between(bin_edges, yref_error_down    , yref_error_up        , color='olivedrab' , alpha=0.2, label = "1$\\sigma$")
 
     # Set labels
     axes[pane_id,0].set_ylabel("Residual",    horizontalalignment='center', x=1)
@@ -607,7 +614,7 @@ def ResidualPane( pane_id, axes,
     axes[pane_id,0].legend(frameon=False,
                          ncol=3,
                          handles=[OneSigma,ThreeSigma,FiveSigma], 
-                         labels = ["1$\sigma$", "3$\sigma$", "5$\sigma$"])
+                         labels = ["1$\\sigma$", "3$\\sigma$", "5$\\sigma$"])
     
     # Set limits and ticks
     axes[pane_id,0].set_ylim([-7.5, 7.5])
@@ -654,7 +661,7 @@ def ResidualPane_Infill( pane_id, axes, fig,
     axes[pane_id,0].set_ylim(-1*max_y_range*1.1, max_y_range*1.1)
 
     # Set labels
-    #axes[pane_id,0].set_ylabel(r'$ \frac{b_{i} - t_{i}}{ \sqrt{ \sigma^{2}_{b,i} + \sigma^{2}_{t,i} } }$',    horizontalalignment='center', x=1)
+    #axes[pane_id,0].set_ylabel(r'$ \frac{b_{i} - t_{i}}{ \sqrt{ \\sigma^{2}_{b,i} + \\sigma^{2}_{t,i} } }$',    horizontalalignment='center', x=1)
     axes[pane_id,0].set_ylabel(f'{comparator_name} \n vs \n Target', fontsize=int(plt.rcParams['axes.labelsize']*0.7),
                                horizontalalignment='center', x=1)
     axes[pane_id,0].set_xlabel('%s'%(column), horizontalalignment='right',  x=1)
@@ -663,7 +670,7 @@ def ResidualPane_Infill( pane_id, axes, fig,
     fig.text(x = 0.008,
              y = 0.35,
              fontsize=plt.rcParams['axes.labelsize'],
-             s = r'Pull : $\frac{b_{i} - t_{i}}{ \sqrt{ \sigma^{2}_{b,i} + \sigma^{2}_{t,i} } }$',
+             s = r'Pull : $\frac{b_{i} - t_{i}}{ \sqrt{ \\sigma^{2}_{b,i} + \\sigma^{2}_{t,i} } }$',
              va = 'center',
              ha = 'left',
              #transform=fig.transAxes,
@@ -674,9 +681,9 @@ def ResidualPane_Infill( pane_id, axes, fig,
     
     # Set legend
     #  ->  Define patches
-    OneSigma   = mtl.patches.Patch(color='olivedrab',  alpha=color_alpha, label = "1$\sigma$")
-    ThreeSigma = mtl.patches.Patch(color='bisque',     alpha=color_alpha, label = "3$\sigma$")
-    FiveSigma  = mtl.patches.Patch(color='lightcoral', alpha=color_alpha, label = "5$\sigma$")
+    OneSigma   = mtl.patches.Patch(color='olivedrab',  alpha=color_alpha, label = "1$\\sigma$")
+    ThreeSigma = mtl.patches.Patch(color='bisque',     alpha=color_alpha, label = "3$\\sigma$")
+    FiveSigma  = mtl.patches.Patch(color='lightcoral', alpha=color_alpha, label = "5$\\sigma$")
     if pane_id == 1:  # Only the first one (first ratio pane)
         axes[pane_id,0].legend(frameon=False,
                                ncol=3,
