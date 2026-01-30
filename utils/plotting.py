@@ -1,6 +1,7 @@
 # Standard Python Modules
 import math
 import collections
+from typing import Iterable, Tuple, Optional, Sequence, Dict, Any
 
 # Pytorch libraries
 import torch
@@ -16,13 +17,24 @@ from tqdm import tqdm
 
 # Standard Python data-science packages
 import scipy
-import uproot
-import uproot.exceptions as exceptions
 import numpy as np
 
 # Standard iterative tools for iterators
 import itertools
-import more_itertools
+
+# Small plotting helpers (extracted to separate module)
+from .plot_helpers import (
+    _safe_normalize,
+    write_table,
+    ResidualPane,
+    ResidualPane_Infill,
+)
+
+from .metrics import (
+    weighted_chi_square_test,
+    Tsallis_KL,
+)
+
 
 # Plotting style from plothist module
 from plothist import set_style
@@ -32,169 +44,115 @@ set_style('default')
 # TROT PATHS
 #import sys
 #sys.path.append('/afs/desy.de/user/s/sjiggins/HiDA/ML4NW/JupyterHub/ml4nw/utils/TROT')
-from .TROT.Generators import euc_costs, real_euc_costs  
+from .TROT.Generators import real_euc_costs
 #from Generators import euc_costs, real_euc_costs  
 from .TROT.Tsallis import TROT, q_log
 #import TROT, q_log
 
 #import euc_costs, real_euc_costs  
 
-def weighted_chi_square_test(x0, w0,
-                             x1, w1,
-                             edges):
-    # Calculate the sum of weights
-    sum_w0 = np.sum(w0)
-    sum_w1 = np.sum(w1)
-    
-    # loop through the bin edges
-    chi_square_terms = []
-    for lower,upper in more_itertools.pairwise(edges):
-        # Now calculate bin mask
-        x0_i_mask = np.where(  ((x0 < upper) & (x0 > lower)), True, False  )
-        x1_i_mask = np.where(  ((x1 < upper) & (x1 > lower)), True, False  )
-        
-        # Calculate sum of weights
-        w0_i = np.sum(w0[x0_i_mask])
-        w1_i = np.sum(w1[x1_i_mask])
-        
-        # Calculate the sum of squared weights ~ variance of bin
-        w0_i_std = np.sqrt(np.sum(w0[x0_i_mask]**2))
-        w0_i_var = np.sum(w0[x0_i_mask]**2)
-        w1_i_std = np.sqrt(np.sum(w1[x1_i_mask]**2))
-        w1_i_var = np.sum(w1[x1_i_mask]**2)
-        
-        # Now calculate the chi-squared term
-        numerator = ((sum_w0*w1_i) - (sum_w1*w0_i))**2
-        denominator = ((sum_w0**2)*w1_i_var) + ((sum_w1**2)*w0_i_var)
-        chi_square_terms.append(numerator/denominator)
-        
-    # Now calculate and return the total chi-squared value
-    return sum(chi_square_terms)/(len(edges)-1-1) # -1 for the edge -> nbins conversion, and then -1 for x^{2} definition
+# `weighted_chi_square_test` is implemented in `utils.plot_helpers` and imported above.
 
 
 # Definition of function for calculating the -ve pdf logical entropy based KL-div
 #      a(x)   = p0  ->  {x0,w0}
 #      b(x)   = p1  ->  {x1,w1}
-def Tsallis_KL(x0, w0,
-               x1, w1,
-               edges):
-
-    # Requirement 1:  Ensure that distribution is unit normalised as all pdf values must be 
-    #                 sum to unity
-    _w0, _w1 = np.copy(w0), np.copy(w1)
-    #if not np.isclose(np.sum(_w0), [1.0]):
-    #    print(f'The total sum of weights does not conserve probability of 1.0 -> Normalising to unit area')
-    _w0 = _w0/np.sum(_w0)
-    #if not np.isclose(np.sum(_w1), [1.0]):
-    #    print(f'The total sum of weights does not conserve probability of 1.0 -> Normalising to unit area')
-    _w1 = _w1/np.sum(_w1)
-        
-    # Formulate from the bin edges the normalised pdf contributions
-    #    -> loop through the bin edges
-    _b_factors, _a_factors = [], []
-    for lower,upper in more_itertools.pairwise(edges):
-        # Now calculate bin mask
-        x0_i_mask = np.where(  ((x0 < upper) & (x0 > lower)), True, False  )
-        x1_i_mask = np.where(  ((x1 < upper) & (x1 > lower)), True, False  )
-        
-        # Calculate sum of weights
-        #_w0_i_sq = (np.sum(_w0[x0_i_mask]))**2
-        _w0_i    = np.sum(_w0[x0_i_mask])
-        #_w1_i_sq = (np.sum(_w1[x1_i_mask]))**2
-        _w1_i    = np.sum(_w1[x1_i_mask])
-
-        # Check for zero probability
-        if np.isclose(_w1_i, [0.0]): 
-            # Set to default values to prevent the term contributing
-            _w0_i = 0.0
-            _w1_i = 1.0
-
-        # Add the support term/factors
-        #_a_factors.append(_w0_i_sq)
-        _a_factors.append(_w0_i)
-        #_b_factors.append(_w1_i_sq)
-        _b_factors.append(_w1_i)
-    
-    _a_factors = np.array(_a_factors)
-    _b_factors = np.array(_b_factors)
-    
-    #return (1 - np.sum(_b_factors))*(np.sum(_a_factors))
-    return np.abs(( np.sum( ( (_a_factors**2) / _b_factors ) - _a_factors ) ))
+# `Tsallis_KL` is implemented in `utils.plot_helpers` and imported above.
     
 
 
 
-def get_set_feature(batch_list, set_name, set_ix, feature_ix, features, sort_index=0):
-    x_batch_list = []
-    w_batch_list = []
+def get_set_feature(batch_list, set_name: str, set_ix: int, feature_ix: int, features: dict, sort_index: int = 0):
+    """Collate function: extract a scalar feature from a set-type feature in each sample.
+
+    Supports both numpy arrays and torch tensors for the event records.
+    """
+    x_list = []
+    w_list = []
     for sample in batch_list:
         for i, feat in enumerate(features):
             if feat != set_name:
                 continue
             t = sample[i]
-            # Sort by pT, assuming it's the first column
-            t = t[t[:,sort_index].argsort(dim=0, descending=True)]
-            try:
-                x_batch_list.append(t[set_ix, feature_ix])
-            except IndexError:
-                x_batch_list.append(np.nan)
-        w_batch_list.append(sample[-1])
-    x_batch = torch.tensor(x_batch_list)
-    w_batch = torch.cat(w_batch_list, dim=0)
-    return x_batch[:, None], w_batch[:, None]
+            if isinstance(t, torch.Tensor):
+                sorted_t = t[t[:, sort_index].argsort(dim=0, descending=True)]
+                try:
+                    x_list.append(sorted_t[set_ix, feature_ix].item())
+                except Exception:
+                    x_list.append(np.nan)
+            else:
+                idx = np.argsort(t[:, sort_index])[::-1]
+                try:
+                    x_list.append(t[idx][set_ix, feature_ix])
+                except Exception:
+                    x_list.append(np.nan)
+        w_list.append(sample[-1])
+
+    x_batch = torch.tensor(x_list, dtype=torch.float32).unsqueeze(1)
+    w_batch = torch.cat(w_list, dim=0)
+    return x_batch, w_batch.unsqueeze(1) 
     
 
-def get_vector_feature(batch_list, name, ix, features):
-    x_batch_list = []
-    w_batch_list = []
+def get_vector_feature(batch_list, name: str, ix: int, features: dict):
+    """Collate function: extract a scalar from a vector feature in each sample."""
+    x_list = []
+    w_list = []
     for sample in batch_list:
         for i, feat in enumerate(features):
             if feat != name:
                 continue
             t = sample[i]
             try:
-                x_batch_list.append(t[0, ix])
-            except IndexError:
-                x_batch_list.append(np.nan)
-        w_batch_list.append(sample[-1])
-    x_batch = torch.tensor(x_batch_list)
-    w_batch = torch.cat(w_batch_list, dim=0)
-    return x_batch[:, None], w_batch[:, None]
+                if isinstance(t, torch.Tensor):
+                    x_list.append(t[0, ix].item())
+                else:
+                    x_list.append(t[0, ix])
+            except Exception:
+                x_list.append(np.nan)
+        w_list.append(sample[-1])
+
+    x_batch = torch.tensor(x_list, dtype=torch.float32).unsqueeze(1)
+    w_batch = torch.cat(w_list, dim=0)
+    return x_batch, w_batch.unsqueeze(1)
 
 
-def get_feature_DataLoader(generator, features, feature_name, index=None, subfeature_name=None, sort_index=0, sort_feature=None, batch_size=128, shuffle=False):
+def get_feature_DataLoader(generator, features: dict, feature_name: str, index=None, subfeature_name=None, sort_index: int = 0, sort_feature: Optional[str] = None, batch_size: int = 128, shuffle: bool = False):
+    """Return a DataLoader that collates a single feature into (x, w) pairs.
+
+    Raises ValueError for misconfigured arguments.
+    """
     features = collections.OrderedDict(sorted(features.items()))
     if sort_feature is not None:
         sort_index = features[feature_name]["subfeatures"].index(sort_feature)
-    
-    loader = DataLoader(generator, batch_size=batch_size, shuffle=shuffle)
+
     if features[feature_name]["set"] is True:
-        try:
-            if subfeature_name is not None and type(index) is int:
-                index = (index, features[feature_name]["subfeatures"].index(subfeature_name))
-            loader.collate_fn = lambda batch: get_set_feature(batch, feature_name, index[0], index[1], features, sort_index=sort_index)
-        except TypeError:
-            print("ERROR: If accessing a set feature then a 2D index should be provided, i.e. (set_index, feature_index), or index should be the set_index and a subfeature_name should be provided.")
+        # Expect a 2D index (set_index, feature_index) or provide a subfeature_name
+        if subfeature_name is not None and isinstance(index, int):
+            index = (index, features[feature_name]["subfeatures"].index(subfeature_name))
+        if not (isinstance(index, tuple) and len(index) == 2):
+            raise ValueError("If accessing a set feature then provide a 2D index (set_index, feature_index) or a subfeature_name.")
+        collate_fn = lambda batch: get_set_feature(batch, feature_name, index[0], index[1], features, sort_index=sort_index)
     else:
         if index is None and subfeature_name is None:
-            print("ERROR: If accessing a float/vector feature then a single index should be provided or a subfeature_name should be provided.")
-        else:
-            if subfeature_name is not None:
-                index = features[feature_name]["subfeatures"].index(subfeature_name)
-            loader.collate_fn = lambda batch: get_vector_feature(batch, feature_name, index, features)
-    return loader
+            raise ValueError("If accessing a float/vector feature then provide an index or subfeature_name.")
+        if subfeature_name is not None:
+            index = features[feature_name]["subfeatures"].index(subfeature_name)
+        collate_fn = lambda batch: get_vector_feature(batch, feature_name, index, features)
+
+    return DataLoader(generator, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn)
 
 
 @torch.no_grad()
-def get_feature_data(loader):
-    temp_x = []
-    temp_w = []
-    t = tqdm(enumerate(loader), total=len(loader))
-    for i, batch in t:
-        temp_x.append(batch[0])
-        temp_w.append(batch[1])
-        t.refresh()  # to show immediately the update
-    return torch.cat(temp_x).numpy().flatten(), torch.cat(temp_w).numpy().flatten()
+def get_feature_data(loader: DataLoader) -> Tuple[np.ndarray, np.ndarray]:
+    """Extract feature values and weights from a DataLoader with the custom collate_fn."""
+    x_list = []
+    w_list = []
+    for batch in tqdm(loader, total=len(loader)):
+        x_list.append(batch[0])
+        w_list.append(batch[1])
+    x = torch.cat(x_list).numpy().flatten()
+    w = torch.cat(w_list).numpy().flatten()
+    return x, w
 
 
 # Idea for later
@@ -220,46 +178,7 @@ def get_feature_data(loader):
     w_batch = torch.cat(w_batch_list, dim=0)
     return x_batch[:, None], w_batch[:, None]"""
 
-# Function for writing tables of statistical measures of distance
-def write_table(axes,
-                stat_measures,
-                header_space = 0.05,
-                footer_space = 0.05,
-                left_margin_space = 0.05,
-                stat_entry_sector_indent = 0.1,
-                string_value_separation = 0.7,
-                fontsize=9):
-
-
-    # Calculate the stat measure sectors
-    stat_sector_size = ( (1.0-header_space)/len(stat_measures) )
-    
-
-    # Loop through the dictionary and write the stat measure and the value
-    for group_id, (stat_name, instances) in enumerate(stat_measures.items()):
-        axes[0,-1].text( x = left_margin_space, 
-                         y = 1 - (header_space + (group_id*stat_sector_size)),# + footer_space), 
-                         fontsize= fontsize+2,
-                         s=stat_name,
-                         weight='bold',
-                         va='center', ha='left',
-                         transform=axes[0,-1].transAxes )
-        for entry, (comparison, value) in enumerate(instances.items()): 
-            axes[0,-1].text(x = (left_margin_space + stat_entry_sector_indent), 
-                            y = 1 - (header_space + (group_id*stat_sector_size) + (entry+1)*(stat_sector_size/(len(instances)+1))),
-                            s = comparison,
-                            fontsize= fontsize,
-                            fontvariant = 'small-caps',
-                            va = 'center',
-                            ha = 'left',
-                            transform=axes[0,-1].transAxes )
-            axes[0,-1].text(x = (left_margin_space + stat_entry_sector_indent + string_value_separation),
-                            y = 1 - (header_space + (group_id*stat_sector_size) + (entry+1)*(stat_sector_size/(len(instances)+1))),
-                            fontsize= fontsize,
-                            s = f'{value:.4f}',
-                            va = 'center',
-                            ha = 'left',
-                            transform=axes[0,-1].transAxes )
+# `write_table` is implemented in `utils.plot_helpers` and imported above.
 
 def plot_distributions(nominal_data, alternate_data,
                        nominal_weights, carl_weights, alternate_weights,
@@ -326,7 +245,7 @@ def plot_distributions(nominal_data, alternate_data,
         w_spec_ref = carl_weights[carl_names.index(ref_name)]
     
     if nominal_mask is not None or carl_mask is not None:
-        athena_mask = np.zeros(w0.shape) == 0
+        athena_mask = np.ones_like(w0, dtype=bool)
         if nominal_mask is not None:
             athena_mask = athena_mask & nominal_mask(nominal_data)
         if carl_mask is not None:
@@ -343,12 +262,11 @@ def plot_distributions(nominal_data, alternate_data,
     if carl_names is None:
         carl_names = ["Nominal*CARL" for _ in range(len(carl_weights))]
 
-    # Normalize
-    w0 /= w0.sum()
-    w_carl = [wc / wc.sum() for wc in w_carl]
-    w1 /= w1.sum()
+    w0 = _safe_normalize(w0)
+    w_carl = [_safe_normalize(wc) for wc in w_carl]
+    w1 = _safe_normalize(w1)
     if w_spec_ref is not None:
-        w_spec_ref /= w_spec_ref.sum()
+        w_spec_ref = _safe_normalize(w_spec_ref)
 
     ### Start plotting
     if kwargs.get('figure.figsize'):
@@ -362,18 +280,21 @@ def plot_distributions(nominal_data, alternate_data,
     axes = gs.subplots(sharex='col')
     axes[0,-1].set_axis_off() # turn off grid lines etc..
 
-    # Calculate binning
-    binning = np.linspace(min([np.percentile(x0, percentile_cuts[0]), np.percentile(x1, percentile_cuts[0])]),
-                          min([np.percentile(x0, percentile_cuts[1]), np.percentile(x1, percentile_cuts[1])]),
-                          nbins)
-    
+    # Calculate binning using percentiles of both samples
+    low = min(np.percentile(x0, percentile_cuts[0]), np.percentile(x1, percentile_cuts[0]))
+    high = max(np.percentile(x0, percentile_cuts[1]), np.percentile(x1, percentile_cuts[1]))
+    if high <= low:
+        # fallback to a small symmetric window
+        low -= 0.5
+        high += 0.5
+    binning = np.linspace(low, high, nbins)
+
     # Statistical Measures
     stat_measures = { r'$\chi^{2}$ Scores' : {}, 
-                      r'$D_{q=2}(B || T)$' : {},}
-                      #'Tsallis EMD' : {}}
+                      r'$D_{q=2}(B || T)$' : {}, }
     if Tsallis_EMD:
-        stat_measures['Tsallis EMD'] = {} 
-                      
+        stat_measures['Tsallis EMD'] = {}
+
     #  EMD parameters
     CostMatrix = real_euc_costs(binning[:-1])
     q = [0.5]
@@ -421,7 +342,7 @@ def plot_distributions(nominal_data, alternate_data,
 
     # Set the primary axis style - [0,0]
     axes[0,0].set_xlabel('%s'%(column), horizontalalignment='right',x=1)
-    axes[0,0].set_ylabel(r"$\frac{1}{N} \cdot \frac{d \\sigma}{dx}$", horizontalalignment='center',x=1, fontsize=20)
+    axes[0,0].set_ylabel("$\\frac{1}{N} \\cdot \\frac{d \\sigma}{dx}$", horizontalalignment='center',x=1, fontsize=20)
     if logscale is True:
         axes[0,0].set_yscale("log")
     axes[0,0].legend(frameon=False,title = f'{legend_title}', prop=font )
@@ -556,169 +477,9 @@ def plot_distributions(nominal_data, alternate_data,
     return hist_x0, hist_x1, binning
     # Done!!!
 
-# Function for creating the bin by bin ratio pane
-def ResidualPane( pane_id, axes,
-                  x_ref_centers,  y_ref_residuals, ref_hist_settings, 
-                  x_carl_centers, y_carl_residuals, carl_hist_settings,
-                  alternate_name = 'Test',
-                  bins = 100,
-                  bin_edges = None,
-                  column='',
-                  color='black'):
+# `ResidualPane` is implemented in `utils.plot_helpers` and imported above.
 
-    ## Plot the residual reference as a straight line
-    ref = axes[pane_id,0].step( x_ref_centers, y_ref_residuals, 
-                              where="post", 
-                              label=alternate_name+" / "+alternate_name, 
-                              **ref_hist_settings)
-    
-    # Plot the residual 
-    carl = axes[pane_id,0].step( x_carl_centers, y_carl_residuals, 
-                               where="post", 
-                               label = '(nominal*CARL) / '+alternate_name, 
-                               color=color,
-                               **carl_hist_settings)
-    axes[pane_id,0].grid(axis='x', color='silver')
-
-    # Error bars/shaded regions for guiding the eyes of the reader
-    #   - 1 sigma
-    yref_error = np.zeros(bins)
-    yref_error_up   = np.full(bins, 1)
-    yref_error_down = np.full(bins, -1)
-    
-    #   - 3 sigma
-    yref_3error_up        = np.full(bins, 3)
-    yref_3error_up_base   = np.full(bins, 1)
-    yref_3error_down      = np.full(bins, -3)
-    yref_3error_down_base = np.full(bins, -1)
-    
-    #   - 5 sigma
-    yref_5error_up        = np.full(bins, 5)
-    yref_5error_up_base   = np.full(bins, 3)
-    yref_5error_down      = np.full(bins, -5)
-    yref_5error_down_base = np.full(bins, -3)
-
-    # Make the error bars
-    FiveSigma  = axes[pane_id,0].fill_between(bin_edges, yref_5error_up_base, yref_5error_up       , color='lightcoral', alpha=0.2 , label = "5$\\sigma$")
-    FiveSigma  = axes[pane_id,0].fill_between(bin_edges, yref_5error_down   , yref_5error_down_base, color='lightcoral', alpha=0.2 , label = "5$\\sigma$")
-    ThreeSigma = axes[pane_id,0].fill_between(bin_edges, yref_3error_up_base, yref_3error_up       , color='bisque'    , alpha=0.3, label = "3$\\sigma$")
-    ThreeSigma = axes[pane_id,0].fill_between(bin_edges, yref_3error_down   , yref_3error_down_base, color='bisque'    , alpha=0.3, label = "3$\\sigma$")
-    OneSigma   = axes[pane_id,0].fill_between(bin_edges, yref_error_down    , yref_error_up        , color='olivedrab' , alpha=0.2, label = "1$\\sigma$")
-    OneSigma   = axes[pane_id,0].fill_between(bin_edges, yref_error_down    , yref_error_up        , color='olivedrab' , alpha=0.2, label = "1$\\sigma$")
-
-    # Set labels
-    axes[pane_id,0].set_ylabel("Residual",    horizontalalignment='center', x=1)
-    axes[pane_id,0].set_xlabel('%s'%(column), horizontalalignment='right',  x=1)
-    
-    # Set legend
-    axes[pane_id,0].legend(frameon=False,
-                         ncol=3,
-                         handles=[OneSigma,ThreeSigma,FiveSigma], 
-                         labels = ["1$\\sigma$", "3$\\sigma$", "5$\\sigma$"])
-    
-    # Set limits and ticks
-    axes[pane_id,0].set_ylim([-7.5, 7.5])
-    axes[pane_id,0].set_yticks(np.arange(-7,7,1.0));
-    # Done!!!
-
-# Function for creating the bin by bin ratio pane
-def ResidualPane_Infill( pane_id, axes, fig,
-                         x_ref_centers,  y_ref_residuals, ref_hist_settings, 
-                         x_carl_centers, y_carl_residuals, carl_hist_settings,
-                         comparator_name = 'Test',
-                         bins = 100,
-                         resi_profile_bins = 26,
-                         bin_edges = None,
-                         resi_range = 6,
-                         column='',
-                         color='black',
-                         interp_power=5,
-                         color_alpha=0.5):
-
-    ## Plot the residual reference as a straight line
-    ref = axes[pane_id,0].step( x_ref_centers, y_ref_residuals, 
-                              where="post", 
-                              label="Target  / Target", 
-                              **ref_hist_settings)
-    
-
-    # Plot the residual as a clip mask on what will be a imshow
-    t, c, k = scipy.interpolate.splrep(bin_edges, y_carl_residuals, s=0, k=interp_power)
-    y_carl_residuals_smoothed = scipy.interpolate.BSpline(t, c, interp_power)
-
-    polygon = axes[pane_id,0].fill_between(bin_edges, np.zeros(bins), y_carl_residuals, color='none', step='mid')
-    #polygon = axes[pane_id,0].fill_between(bin_edges, np.zeros(bins), y_carl_residuals_smoothed, color='none')
-    verticals = np.vstack( [p.vertices for p in polygon.get_paths()] )
-    imshow_extent = [verticals[:,0].min(), verticals[:,0].max(), verticals[:,1].min(), verticals[:,1].max()]
-    filling = axes[pane_id,0].imshow(np.abs(y_carl_residuals.reshape(1,-1)), cmap='RdYlGn_r', aspect='auto', alpha = color_alpha,
-                                   extent=imshow_extent, vmin=0.0, vmax=5.0)
-    filling.set_clip_path(polygon.get_paths()[0], transform=axes[pane_id,0].transData)
-    # Now add the smoothed line
-    axes[pane_id,0].plot(bin_edges, y_carl_residuals_smoothed(bin_edges), color=color)
-
-    # Set symmetric limits
-    max_y_range = np.abs(verticals[:,1].min()) if np.abs(verticals[:,1].min()) > np.abs(verticals[:,1].max()) else np.abs(verticals[:,1].max()) 
-    axes[pane_id,0].set_ylim(-1*max_y_range*1.1, max_y_range*1.1)
-
-    # Set labels
-    #axes[pane_id,0].set_ylabel(r'$ \frac{b_{i} - t_{i}}{ \sqrt{ \\sigma^{2}_{b,i} + \\sigma^{2}_{t,i} } }$',    horizontalalignment='center', x=1)
-    axes[pane_id,0].set_ylabel(f'{comparator_name} \n vs \n Target', fontsize=int(plt.rcParams['axes.labelsize']*0.7),
-                               horizontalalignment='center', x=1)
-    axes[pane_id,0].set_xlabel('%s'%(column), horizontalalignment='right',  x=1)
-
-    # Add a general name for the ratio panes
-    fig.text(x = 0.008,
-             y = 0.35,
-             fontsize=plt.rcParams['axes.labelsize'],
-             s = r'Pull : $\frac{b_{i} - t_{i}}{ \sqrt{ \\sigma^{2}_{b,i} + \\sigma^{2}_{t,i} } }$',
-             va = 'center',
-             ha = 'left',
-             #transform=fig.transAxes,
-             rotation='vertical')    
-
-    # Style
-    axes[pane_id,0].grid(axis='y', linestyle='dashed', which='major', color='darkgrey')
-    
-    # Set legend
-    #  ->  Define patches
-    OneSigma   = mtl.patches.Patch(color='olivedrab',  alpha=color_alpha, label = "1$\\sigma$")
-    ThreeSigma = mtl.patches.Patch(color='bisque',     alpha=color_alpha, label = "3$\\sigma$")
-    FiveSigma  = mtl.patches.Patch(color='lightcoral', alpha=color_alpha, label = "5$\\sigma$")
-    if pane_id == 1:  # Only the first one (first ratio pane)
-        axes[pane_id,0].legend(frameon=False,
-                               ncol=3,
-                               handles=[OneSigma,ThreeSigma,FiveSigma])
-    
-    # Set limits and ticks
-    #axes[pane_id,0].set_ylim([-7.5, 7.5])
-    #axes[pane_id,0].set_yticks(np.arange(-7,7,1.0));
-
-    # Now plot the projected distribution of residuals
-    axes[pane_id,-1].hist(y_carl_residuals, bins=resi_profile_bins, 
-                          range = [-1*resi_range, resi_range],
-                          histtype='step', color='dimgray')#, orientation='horizontal')
-    axes[pane_id,-1].hist( [np.where( np.abs(y_carl_residuals) >= 3, y_carl_residuals, np.nan),
-                            np.where( (np.abs(y_carl_residuals) < 3) & (np.abs(y_carl_residuals) >= 1), y_carl_residuals, np.nan),
-                            np.where(np.abs(y_carl_residuals) < 1, y_carl_residuals, np.nan)],
-                           bins=resi_profile_bins, 
-                           range = [-1*resi_range, resi_range],
-                           histtype='stepfilled', 
-                           stacked=True,
-                           color=['lightcoral','bisque', 'olivedrab'],
-                           alpha=color_alpha)#, orientation='horizontal')
-    # Now set the x/y-axis labels
-    axes[pane_id,-1].set_xlabel('Pull', 
-                                horizontalalignment='right',x=1)
-    axes[pane_id,-1].set_ylabel('Pull Frequency',
-                                fontsize=int(plt.rcParams['axes.labelsize']*0.75),
-                                horizontalalignment='center', 
-                                x=1)
-
-    # Move y-axis to the right
-    axes[pane_id,-1].yaxis.set_label_position("right")
-    axes[pane_id,-1].yaxis.tick_right()
-    #axes[pane_id,-1].set_xlim([-5, 5])
-    # Done!!!
+# `ResidualPane_Infill` is implemented in `utils.plot_helpers` and imported above.
 
 
 def plot_carl_reweighting(nominal_dataset, alternative_dataset, carl_weights, features, feature_name,
