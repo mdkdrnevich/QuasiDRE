@@ -22,7 +22,6 @@ import yaml
 from tqdm import tqdm
 import os.path as osp
 
-from .tools import os_splitroot
 
 class Dataset:
     def __init__(
@@ -251,8 +250,7 @@ def load_scaling(path_to_zip):
         (StandardScaler, float): reconstructed scaler and stored
         weight normalization value.
     """
-    name = osp.splitext(path_to_zip)[0]
-    name = os_splitroot(name)[-1]
+    name = osp.split(osp.splitext(path_to_zip)[0])[-1]
     with zipfile.ZipFile(path_to_zip, 'r') as zf:
         try:
             scaling_metadata = yaml.load(zf.read("{}_metadata.yaml".format(name)), Loader=yaml.CLoader)["scaling"]

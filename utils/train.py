@@ -19,7 +19,6 @@ import collections
 from tqdm import tqdm
 import types
 
-from .tools import os_splitroot
 from . import preprocessing as carl_preprocessing
 from . import models as carl_models
 
@@ -409,7 +408,7 @@ def get_model_metadata(training_settings, model, input_scaler, weight_scale):
     return metadata
 
 
-def save_model_data(model, metadata, name="model", save_onnx=True, device='cpu'):
+def save_model_data(model, metadata, savedir='.', name="model", save_onnx=True, device='cpu'):
     """Persist model parameters and metadata into a zip archive.
 
     The function writes a temporary YAML file with `metadata`, the
@@ -428,8 +427,13 @@ def save_model_data(model, metadata, name="model", save_onnx=True, device='cpu')
     Returns:
         None
     """
-    yaml.dump(metadata, open("{}_metadata.yaml".format(name), 'w'))
-    torch.save(model.state_dict(), "{}.pth".format(name))
+    yaml_name = "{}_metadata.yaml".format(name)
+    pth_name = "{}.pth".format(name)
+    yaml_path = osp.join(savedir, yaml_name)
+    pth_path = osp.join(savedir, pth_name)
+    zip_path = osp.join(savedir, "{}.zip".format(name))
+    yaml.dump(metadata, open(yaml_path, 'w'))
+    torch.save(model.state_dict(), pth_path)
     """
     if save_onnx is True:
         model = model.to('cpu')
@@ -465,13 +469,13 @@ def save_model_data(model, metadata, name="model", save_onnx=True, device='cpu')
     """
         
     # Bundle files into a single archive for convenient distribution
-    with zipfile.ZipFile("{}.zip".format(name), mode='w') as zipf:
-        zipf.write("{}_metadata.yaml".format(name))
-        zipf.write("{}.pth".format(name))
+    with zipfile.ZipFile(zip_path, mode='w') as zipf:
+        zipf.write(yaml_path, arcname=yaml_name)
+        zipf.write(pth_path, arcname=pth_name)
 
     # Clean up temporary files
-    os.remove("{}_metadata.yaml".format(name))
-    os.remove("{}.pth".format(name))
+    os.remove(yaml_path)
+    os.remove(pth_path)
     return None
 
 
@@ -489,8 +493,7 @@ def load_training_settings(path_to_zip):
     Returns:
         dict: training settings previously stored in metadata.
     """
-    name = osp.splitext(path_to_zip)[0]
-    name = os_splitroot(name)[-1]
+    name = osp.split(osp.splitext(path_to_zip)[0])[-1]
     with zipfile.ZipFile(path_to_zip, 'r') as zf:
         try:
             return yaml.load(zf.read("{}_metadata.yaml".format(name)), Loader=yaml.CLoader)["training"]

@@ -19,7 +19,6 @@ from typing import List
 import os
 import os.path as osp
 
-from .tools import os_splitroot
 from . import preprocessing as carl_preprocessing
 
 
@@ -264,9 +263,7 @@ class SingleMixtureClassifier(MixtureClassifier):
 
 def load_metadata(path_to_zip):    
     with zipfile.ZipFile(path_to_zip, 'r') as zf:
-        #name = osp.split(osp.splitext(path_to_zip)[0])[1]
-        name = osp.splitext(path_to_zip)[0]
-        name = os_splitroot(name)[-1]
+        name = osp.split(osp.splitext(path_to_zip)[0])[-1]
         try:
             metadata = yaml.load(zf.read("{}_metadata.yaml".format(name)), Loader=yaml.CLoader)
         except KeyError:
@@ -277,8 +274,7 @@ def load_metadata(path_to_zip):
 
 def load_model_state(path_to_zip, model, device='cpu'):    
     with zipfile.ZipFile(path_to_zip, 'r') as zf:
-        name = osp.splitext(path_to_zip)[0]
-        name = os_splitroot(name)[-1]
+        name = osp.split(osp.splitext(path_to_zip)[0])[-1]
         try:
             model.load_state_dict(torch.load(io.BytesIO(zf.read("{}.pth".format(name))), map_location=device))
         except KeyError:
