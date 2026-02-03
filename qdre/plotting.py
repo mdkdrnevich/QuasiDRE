@@ -6,7 +6,7 @@ import types
 
 # Pytorch libraries
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, IterableDataset
 
 # Standard Plotting Toolkit
 import matplotlib as mtl
@@ -47,23 +47,13 @@ from plothist import set_style
 from plothist import add_luminosity
 set_style('default')
 
-# TROT PATHS
-#import sys
-#sys.path.append('/afs/desy.de/user/s/sjiggins/HiDA/ML4NW/JupyterHub/ml4nw/utils/TROT')
-from .TROT.Generators import real_euc_costs
-#from Generators import euc_costs, real_euc_costs  
-from .TROT.Tsallis import TROT, q_log
-#import TROT, q_log
-
-#import euc_costs, real_euc_costs  
-
-# `weighted_chi_square_test` is implemented in `utils.plot_helpers` and imported above.
+# `weighted_chi_square_test` is implemented in `plot_helpers` and imported above.
 
 
 # Definition of function for calculating the -ve pdf logical entropy based KL-div
 #      a(x)   = p0  ->  {x0,w0}
 #      b(x)   = p1  ->  {x1,w1}
-# `Tsallis_KL` is implemented in `utils.plot_helpers` and imported above.
+# `Tsallis_KL` is implemented in `plot_helpers` and imported above.
 
 
 
@@ -231,6 +221,13 @@ def get_feature_DataLoader(generator, features: dict, feature_name: str, index=N
             index = features[feature_name]["subfeatures"].index(subfeature_name)
         collate_fn = lambda batch: get_vector_feature(batch, feature_name, index, features)
 
+    # DataLoader expects a map-style dataset (indexable) by default. If we're
+    # given an iterable that isn't subscriptable (has __iter__ but not
+    # __getitem__), materialize it into a list unless it's already a
+    # torch IterableDataset.
+    if not hasattr(generator, "__getitem__") and not isinstance(generator, IterableDataset):
+        generator = list(generator)
+
     return DataLoader(generator, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn)
 
 
@@ -270,7 +267,7 @@ def get_feature_data(loader: DataLoader) -> Tuple[np.ndarray, np.ndarray]:
     w_batch = torch.cat(w_batch_list, dim=0)
     return x_batch[:, None], w_batch[:, None]"""
 
-# `write_table` is implemented in `utils.plot_helpers` and imported above.
+# `write_table` is implemented in `plot_helpers` and imported above.
 
 def plot_distributions(nominal_data, alternate_data,
                        nominal_weights, carl_weights, alternate_weights,
@@ -285,7 +282,6 @@ def plot_distributions(nominal_data, alternate_data,
                        saveAs=None,
                        nbins = 100,
                        global_name = "",
-                       Tsallis_EMD = False,
                        add_table = True,
                        show=True,
                        logging=False,
@@ -384,13 +380,8 @@ def plot_distributions(nominal_data, alternate_data,
     # Statistical Measures
     stat_measures = { r'$\chi^{2}$ Scores' : {}, 
                       r'$D_{q=2}(B || T)$' : {}, }
-    if Tsallis_EMD:
-        stat_measures['Tsallis EMD'] = {}
 
-    #  EMD parameters
-    CostMatrix = real_euc_costs(binning[:-1])
-    q = [0.5]
-    l = [50]
+
 
     # Plot the base and target
     hist_x0, edges_x0, _ = axes[0,0].hist(x0, bins=binning, weights=w0, label=nominal_name, **hist_settings_nom, density=True)
@@ -404,13 +395,7 @@ def plot_distributions(nominal_data, alternate_data,
         # Tsallis Relative Entropy
         tsallis_KL = [Tsallis_KL( x1, w1, x0, w0, binning )]
         stat_measures[r'$D_{q=2}(B || T)$']['Base / Target:'] = Tsallis_KL( x1, w1, x0, w0, binning )
-        # Tsallis EMD
-        if Tsallis_EMD:
-            stat_measures['Tsallis EMD']['Base / Target:'] = np.sqrt(np.sum(TROT( q[0], 
-                                                                                CostMatrix, 
-                                                                                hist_x1, hist_x0,
-                                                                                l[0],
-                                                                                1E-7)*CostMatrix))
+
 
     # Form the CARL histograms
     carl_hists = []
@@ -420,15 +405,7 @@ def plot_distributions(nominal_data, alternate_data,
                               label=carl_names[i], **hist_settings_CARL, density=True)
         carl_hists.append(hist)
         
-        # - TROT EMD metric
-        if Tsallis_EMD and add_table:
-            U = TROT( q[0], 
-                      CostMatrix, 
-                      np.array(hist), np.array(hist_x1),
-                      l[0],
-                      1E-7)
-            #stat_measures['Tsallis EMD'][f'{carl_names[i]} / Target:'] = np.sqrt(np.sum(U*CostMatrix))
-            stat_measures['Tsallis EMD'][f'{carl_names[i]}:'] = np.sqrt(np.sum(U*CostMatrix))
+
 
     
 
@@ -569,9 +546,9 @@ def plot_distributions(nominal_data, alternate_data,
     return hist_x0, hist_x1, binning
     # Done!!!
 
-# `ResidualPane` is implemented in `utils.plot_helpers` and imported above.
+# `ResidualPane` is implemented in `plot_helpers` and imported above.
 
-# `ResidualPane_Infill` is implemented in `utils.plot_helpers` and imported above.
+# `ResidualPane_Infill` is implemented in `plot_helpers` and imported above.
 
 
 def plot_carl_reweighting(nominal_dataset, alternative_dataset, carl_weights, features, feature_name,
