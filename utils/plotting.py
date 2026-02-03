@@ -2,6 +2,7 @@
 import math
 import collections
 from typing import Iterable, Tuple, Optional, Sequence, Dict, Any
+import types
 
 # Pytorch libraries
 import torch
@@ -16,7 +17,6 @@ import matplotlib.font_manager as font_manager
 from tqdm import tqdm
 
 # Standard Python data-science packages
-import scipy
 import numpy as np
 
 # Standard iterative tools for iterators
@@ -33,6 +33,12 @@ from .plot_helpers import (
 from .metrics import (
     weighted_chi_square_test,
     Tsallis_KL,
+)
+
+from .preprocessing import (
+    prep_inputs_for_training,
+    prep_inputs_for_training_mix,
+    prep_inputs_for_density,
 )
 
 
@@ -58,8 +64,94 @@ from .TROT.Tsallis import TROT, q_log
 #      a(x)   = p0  ->  {x0,w0}
 #      b(x)   = p1  ->  {x1,w1}
 # `Tsallis_KL` is implemented in `utils.plot_helpers` and imported above.
-    
 
+
+
+@torch.no_grad()
+def get_scores(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=False, device='cpu'):
+    if type(model) is not types.FunctionType:
+        model.eval()
+        if mix is True:
+            loader.collate_fn = lambda batch: prep_inputs_for_training_mix(batch, weight_norm=weight_norm)
+        else:
+            loader.collate_fn = lambda batch: prep_inputs_for_training(batch, X_scaler, weight_norm=weight_norm)
+    else:
+        loader.collate_fn = lambda batch: prep_inputs_for_density(batch, weight_norm=weight_norm)
+
+    score_list = []
+    target_list = []
+    weight_list = []
+    t = tqdm(enumerate(loader), total=len(loader), leave=leave)
+    for i, batch in t:
+        target_list.append(batch[1])
+        weight_list.append(batch[2])
+        if type(model) is not types.FunctionType:
+            x = batch[0].to(device)
+        else:
+            x = batch[0].to('cpu')
+        batch_score = model(x)
+        score_list.append(batch_score)
+        t.refresh()  # to show immediately the update
+
+    return torch.cat(score_list).cpu().numpy().flatten(), torch.cat(target_list).cpu().numpy().flatten(), torch.cat(weight_list).cpu().numpy().flatten()
+
+
+@torch.no_grad()
+def get_r_hats(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=False, loss="bce", t0=None, t1=None, device='cpu'):
+    if type(model) is not types.FunctionType:
+        model.eval()
+        if mix is True:
+            loader.collate_fn = lambda batch: prep_inputs_for_training_mix(batch, weight_norm=weight_norm)
+        else:
+            loader.collate_fn = lambda batch: prep_inputs_for_training(batch, X_scaler, weight_norm=weight_norm)
+    else:
+        loader.collate_fn = lambda batch: prep_inputs_for_density(batch, weight_norm=weight_norm)
+
+    r_hat_list = []
+    t = tqdm(enumerate(loader), total=len(loader), leave=leave)
+    for i, batch in t:
+        if type(model) is not types.FunctionType:
+            x = batch[0].to(device)
+        else:
+            x = batch[0].to('cpu')
+        
+        if mix is True:
+            r_hat = model.ratio(x)
+        else:
+            batch_output = model(x)
+            if loss in ["bce", "mse"]:
+                r_hat = batch_output / (1 - batch_output)
+            elif loss == "pare":
+                r_hat = - t0*(1- t0*batch_output)/(t1*(1 - t1*batch_output))
+            elif loss == 'revert':
+                r_hat = (1-2*batch_output) / (batch_output - batch_output**2)
+        r_hat_list.append(r_hat)
+        t.refresh()  # to show immediately the update
+
+    return torch.cat(r_hat_list).cpu().numpy().flatten()
+
+
+def get_x_i(batch_list, ix):
+    x_batch_list = []
+    w_batch_list = []
+    for sample in batch_list:
+        x_batch_list.append(sample[0])
+        w_batch_list.append(sample[2])
+    x_batch = torch.stack(x_batch_list)[:,ix]
+    w_batch = torch.stack(w_batch_list)
+    return x_batch, w_batch    
+
+
+@torch.no_grad()
+def get_plot_data(loader, leave=False):
+    temp_x = []
+    temp_w = []
+    t = tqdm(enumerate(loader), total=len(loader), leave=leave)
+    for i, batch in t:
+        temp_x.append(batch[0])
+        temp_w.append(batch[1])
+        t.refresh()  # to show immediately the update
+    return torch.cat(temp_x).numpy().flatten(), torch.cat(temp_w).numpy().flatten()
 
 
 def get_set_feature(batch_list, set_name: str, set_ix: int, feature_ix: int, features: dict, sort_index: int = 0):

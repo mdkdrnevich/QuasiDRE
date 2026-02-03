@@ -5,85 +5,8 @@ import tempfile
 import shutil
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-from tqdm import tqdm
 import vector
 import utils.plotting
-import types
-
-
-@torch.no_grad()
-def get_scores(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=False, device='cpu'):
-    if type(model) is not types.FunctionType:
-        model.eval()
-        if mix is True:
-            loader.collate_fn = lambda batch: utils.preprocessing.prep_inputs_for_training_mix(batch, weight_norm=weight_norm)
-        else:
-            loader.collate_fn = lambda batch: utils.preprocessing.prep_inputs_for_training(batch, X_scaler, weight_norm=weight_norm)
-    else:
-        loader.collate_fn = lambda batch: utils.preprocessing.prep_inputs_for_density(batch, weight_norm=weight_norm)
-
-    score_list = []
-    target_list = []
-    weight_list = []
-    t = tqdm(enumerate(loader), total=len(loader), leave=leave)
-    for i, batch in t:
-        target_list.append(batch[1])
-        weight_list.append(batch[2])
-        if type(model) is not types.FunctionType:
-            x = batch[0].to(device)
-        else:
-            x = batch[0].to('cpu')
-        batch_score = model(x)
-        score_list.append(batch_score)
-        t.refresh()  # to show immediately the update
-
-    return torch.cat(score_list).cpu().numpy().flatten(), torch.cat(target_list).cpu().numpy().flatten(), torch.cat(weight_list).cpu().numpy().flatten()
-
-
-@torch.no_grad()
-def get_r_hats(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=False, loss="bce", t0=None, t1=None, device='cpu'):
-    if type(model) is not types.FunctionType:
-        model.eval()
-        if mix is True:
-            loader.collate_fn = lambda batch: utils.preprocessing.prep_inputs_for_training_mix(batch, weight_norm=weight_norm)
-        else:
-            loader.collate_fn = lambda batch: utils.preprocessing.prep_inputs_for_training(batch, X_scaler, weight_norm=weight_norm)
-    else:
-        loader.collate_fn = lambda batch: utils.preprocessing.prep_inputs_for_density(batch, weight_norm=weight_norm)
-
-    r_hat_list = []
-    t = tqdm(enumerate(loader), total=len(loader), leave=leave)
-    for i, batch in t:
-        if type(model) is not types.FunctionType:
-            x = batch[0].to(device)
-        else:
-            x = batch[0].to('cpu')
-        
-        if mix is True:
-            r_hat = model.ratio(x)
-        else:
-            batch_output = model(x)
-            if loss in ["bce", "mse"]:
-                r_hat = batch_output / (1 - batch_output)
-            elif loss == "pare":
-                r_hat = - t0*(1- t0*batch_output)/(t1*(1 - t1*batch_output))
-            elif loss == 'revert':
-                r_hat = (1-2*batch_output) / (batch_output - batch_output**2)
-        r_hat_list.append(r_hat)
-        t.refresh()  # to show immediately the update
-
-    return torch.cat(r_hat_list).cpu().numpy().flatten()
-
-
-def get_x_i(batch_list, ix):
-    x_batch_list = []
-    w_batch_list = []
-    for sample in batch_list:
-        x_batch_list.append(sample[0])
-        w_batch_list.append(sample[2])
-    x_batch = torch.stack(x_batch_list)[:,ix]
-    w_batch = torch.stack(w_batch_list)
-    return x_batch, w_batch
 
 
 def get_HH_4vec(batch_list, keys, nMuons=4):
@@ -127,18 +50,6 @@ def get_eta_HH(batch_list, keys, nMuons=4):
 def get_phi_HH(batch_list, keys, nMuons=4):
     HH_4vec, w_batch = get_HH_4vec(batch_list, keys, nMuons=nMuons)
     return torch.from_numpy(HH_4vec.phi), w_batch
-
-
-@torch.no_grad()
-def get_plot_data(loader, leave=False):
-    temp_x = []
-    temp_w = []
-    t = tqdm(enumerate(loader), total=len(loader), leave=leave)
-    for i, batch in t:
-        temp_x.append(batch[0])
-        temp_w.append(batch[1])
-        t.refresh()  # to show immediately the update
-    return torch.cat(temp_x).numpy().flatten(), torch.cat(temp_w).numpy().flatten()
 
 
 def plot_closure(ratio_est,
@@ -236,11 +147,11 @@ def plot_closure(ratio_est,
             nominal_loader.collate_fn = hh_loaders[j]
             target_loader.collate_fn = hh_loaders[j]
         else:
-            nominal_loader.collate_fn = lambda batch, ix=idx: get_x_i(batch, ix)
-            target_loader.collate_fn = lambda batch, ix=idx: get_x_i(batch, ix)
+            nominal_loader.collate_fn = lambda batch, ix=idx: utils.plotting.get_x_i(batch, ix)
+            target_loader.collate_fn = lambda batch, ix=idx: utils.plotting.get_x_i(batch, ix)
 
-        test_nominal_xi = get_plot_data(nominal_loader)
-        test_target_xi = get_plot_data(target_loader)
+        test_nominal_xi = utils.plotting.get_plot_data(nominal_loader)
+        test_target_xi = utils.plotting.get_plot_data(target_loader)
 
         save_path = None
         if save:
