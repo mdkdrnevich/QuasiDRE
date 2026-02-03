@@ -6,7 +6,7 @@ import shutil
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-from utils.plotting import get_x_i, get_plot_data, plot_distributions
+from qdre.plotting import get_x_i, get_plot_data, plot_distributions
 
 
 def get_r(batch_list):
