@@ -6,7 +6,7 @@ import shutil
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import vector
-import utils.plotting
+import qdre.plotting
 
 
 def get_HH_4vec(batch_list, keys, nMuons=4):
@@ -147,11 +147,11 @@ def plot_closure(ratio_est,
             nominal_loader.collate_fn = hh_loaders[j]
             target_loader.collate_fn = hh_loaders[j]
         else:
-            nominal_loader.collate_fn = lambda batch, ix=idx: utils.plotting.get_x_i(batch, ix)
-            target_loader.collate_fn = lambda batch, ix=idx: utils.plotting.get_x_i(batch, ix)
+            nominal_loader.collate_fn = lambda batch, ix=idx: qdre.plotting.get_x_i(batch, ix)
+            target_loader.collate_fn = lambda batch, ix=idx: qdre.plotting.get_x_i(batch, ix)
 
-        test_nominal_xi = utils.plotting.get_plot_data(nominal_loader)
-        test_target_xi = utils.plotting.get_plot_data(target_loader)
+        test_nominal_xi = qdre.plotting.get_plot_data(nominal_loader)
+        test_target_xi = qdre.plotting.get_plot_data(target_loader)
 
         save_path = None
         if save:
@@ -160,7 +160,7 @@ def plot_closure(ratio_est,
 
         ratio_list = ratio_est if isinstance(ratio_est, (list, tuple)) else [ratio_est]
 
-        utils.plotting.plot_distributions(test_nominal_xi[0], test_target_xi[0],
+        qdre.plotting.plot_distributions(test_nominal_xi[0], test_target_xi[0],
                                           test_nominal_xi[1], ratio_list, test_target_xi[1],
                                           carl_names=carl_names,
                                           feature_name=feature_labels[j],
