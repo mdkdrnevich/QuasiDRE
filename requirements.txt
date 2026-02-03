@@ -1,0 +1,13 @@
+# Exact pinned runtime requirements exported from conda env `ML`
+# This file pins the packages used by the code under `utils/` and tests.
+
+numpy==2.0.1
+# PyTorch (pip wheel in this environment; includes CUDA tag)
+torch==2.7.0 #2.7.0.dev20250307+cu128
+matplotlib==3.10.0
+scipy==1.15.1
+tqdm==4.67.1
+PyYAML==6.0.2
+plothist==1.3.0
+# Test dependency
+pytest==8.4.2
