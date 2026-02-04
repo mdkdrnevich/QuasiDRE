@@ -7,7 +7,7 @@ Density-ratio estimation tools and experiments for quasi-probabilistic distribut
 **QuasiDRE** is a collection of notebooks, training utilities, evaluation code and tests for density-ratio estimation methods (SMMs, CARL, REVERT, etc.). The repository contains both physics-inspired experiments (`SMEFT/`) and smaller toy-model experiments (`ToyModels/`) along with shared utilities under the `qdre/` package (core helpers for preprocessing, training, plotting and metrics).
 
 ### Associated publication 📚
-This codebase was developed to accompany the paper "Quasi-probabilistic Density-Ratio Estimation" (arXiv:2512.19913). The repository contains the implementation, notebooks, and experiments used in the paper — including data preprocessing, model training (SMMs, CARL, REVERT), evaluation code, and plotting utilities — to reproduce the figures and numerical results reported in the manuscript.
+This codebase was developed to accompany the paper "Quasiprobabilistic Density Ratio Estimation with a Reverse Engineered Classification Loss Function" (arXiv:2512.19913). The repository contains the implementation, notebooks, and experiments used in the paper — including data preprocessing, model training (SMMs, CARL, REVERT), evaluation code, and plotting utilities — to reproduce the figures and numerical results reported in the manuscript.
 
 Please cite the paper when using this code: https://arxiv.org/abs/2512.19913
 
