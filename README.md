@@ -1,4 +1,4 @@
-# QuasiDRE ✅
+# QuasiDRE
 Density-ratio estimation tools and experiments for quasi-probabilistic distributions.
 
 ---
@@ -36,7 +36,7 @@ Top-level structure (short):
 - `examples/ToyModels/` - Toy model data, generation notebooks and experiments used for quick prototyping.
 - `qdre/` - Core Python package used across experiments with the following submodules:
   - `qdre/plotting.py` — plotting helpers, feature extraction and distribution/evaluation utilities used by tests and notebooks
-  - `qdre/metrics.py` — statistical measures and tests (weighted chi-square, Tsallis KL, ...)
+  - `qdre/metrics.py` — statistical measures and tests (weighted chi-square, Tsallis KL, SWD)
   - `qdre/preprocessing.py` — data collation / preprocessing helpers used by training/evaluation loops
   - `qdre/train.py` — training and evaluation loops, loss helpers (Pare, REVERT) and serialization helpers
   - `qdre/models.py` — small model definitions used in the notebooks
@@ -82,7 +82,7 @@ The tests under `tests/` import directly from `qdre.plotting` to avoid package-l
 
 ## Notebooks & experiments 📓
 
-- `SMEFT/` contains the main analysis notebooks used for data processing, training different classifiers and evaluating them (e.g. `train_SMM_classifier.ipynb`, `train_MLP_loss_classifier.ipynb`, `evaluate_classifiers.ipynb`). Data used by these notebooks are stored under `SMEFT/data/` (mostly `.npy` arrays and occasionally `.root` files).
+- `SMEFT/` contains the main analysis notebooks used for data processing, training different classifiers and evaluating them using the SMEFT dataset (see below).
 - `ToyModels/` is a lighter-weight playground for synthetic data generation, training and evaluation (good for fast iteration).
 
 Open any notebook with Jupyter/VSCode and run the cells to reproduce or explore experiments.
@@ -115,7 +115,7 @@ from qdre import train, plotting
 
   [1]S. Jiggins and M. Drnevich, “Neural Quasiprobabilistic Likelihood Ratio Estimation Dataset”. Zenodo, Mar. 28, 2025. doi: 10.5281/zenodo.15102316.
 
-- By default, trained models and evaluation outputs are stored in `models/` and `results_SWD/`.
+- By default, trained models and evaluation outputs are stored in `models/` and `results_SWD/` (for Sliced-Wasserstein result distributions).
 
 
 ---
