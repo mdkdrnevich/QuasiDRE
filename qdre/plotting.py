@@ -83,7 +83,8 @@ def get_scores(model, loader, X_scaler=None, weight_norm=1, mix=False, device='c
             x = batch[0].to('cpu')
         batch_score = model(x)
         score_list.append(batch_score)
-        t.refresh()  # to show immediately the update
+        if progress_bar:
+            t.refresh()  # to show immediately the update
 
     return torch.cat(score_list).cpu().numpy().flatten(), torch.cat(target_list).cpu().numpy().flatten(), torch.cat(weight_list).cpu().numpy().flatten()
 
