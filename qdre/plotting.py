@@ -58,7 +58,7 @@ set_style('default')
 
 
 @torch.no_grad()
-def get_scores(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=False, device='cpu'):
+def get_scores(model, loader, X_scaler=None, weight_norm=1, mix=False, device='cpu', progress_bar=True, leave=False):
     if type(model) is not types.FunctionType:
         model.eval()
         if mix is True:
@@ -71,8 +71,10 @@ def get_scores(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=Fal
     score_list = []
     target_list = []
     weight_list = []
-    t = tqdm(enumerate(loader), total=len(loader), leave=leave)
-    for i, batch in t:
+    iterator = enumerate(loader)
+    if progress_bar:
+        iterator = tqdm(iterator, total=len(loader), leave=leave)
+    for i, batch in iterator:
         target_list.append(batch[1])
         weight_list.append(batch[2])
         if type(model) is not types.FunctionType:
