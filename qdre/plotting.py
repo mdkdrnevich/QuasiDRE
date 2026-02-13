@@ -90,7 +90,7 @@ def get_scores(model, loader, X_scaler=None, weight_norm=1, mix=False, device='c
 
 
 @torch.no_grad()
-def get_r_hats(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=False, loss="bce", t0=None, t1=None, device='cpu'):
+def get_r_hats(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=False, loss="bce", t0=None, t1=None, device='cpu', return_weights=False):
     if type(model) is not types.FunctionType:
         model.eval()
         if mix is True:
@@ -101,8 +101,10 @@ def get_r_hats(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=Fal
         loader.collate_fn = lambda batch: prep_inputs_for_density(batch, weight_norm=weight_norm)
 
     r_hat_list = []
+    weight_list = []
     t = tqdm(enumerate(loader), total=len(loader), leave=leave)
     for i, batch in t:
+        weight_list.append(batch[2])
         if type(model) is not types.FunctionType:
             x = batch[0].to(device)
         else:
@@ -121,7 +123,10 @@ def get_r_hats(model, loader, X_scaler=None, weight_norm=1, mix=False, leave=Fal
         r_hat_list.append(r_hat)
         t.refresh()  # to show immediately the update
 
-    return torch.cat(r_hat_list).cpu().numpy().flatten()
+    if return_weights:
+        return torch.cat(r_hat_list).cpu().numpy().flatten(), torch.cat(weight_list).cpu().numpy().flatten()
+    else:
+        return torch.cat(r_hat_list).cpu().numpy().flatten()
 
 
 def get_x_i(batch_list, ix):
